@@ -24,7 +24,6 @@ services:
       - default
     tty: true
   websocket:
-    image: node:lts-alpine
     build:
       context: .
       dockerfile: Dockerfile
