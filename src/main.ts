@@ -1,16 +1,18 @@
 import { NestFactory } from '@nestjs/core';
+import 'dotenv/config';
 import { AppModule } from './app.module';
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const frontendUrl =
     process.env.FRONTEND_URL || 'https://dev.salary2020.tw:50401'; // 預設或從環境變數讀取前端URL
 
-  const allowedOrigins = [
-    'http://127.0.0.1:3000', // 本地開發環境
-    'https://dev.salary2020.tw:50401',
-  ];
+
+  const allowedOrigins = process.env.ALLOW_CORS?.split(',')
+  // const allowedOrigins = [
+  //   'http://127.0.0.1:3000', // 本地開發環境
+  //   'https://dev.salary2020.tw:50401',
+  // ];
 
   app.enableCors({
     origin: allowedOrigins, // 允許來自你的 Laravel 前端應用的請求
