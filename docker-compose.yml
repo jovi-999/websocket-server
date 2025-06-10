@@ -1,0 +1,23 @@
+services:
+  nginx:
+    build:
+      context: ./nginx
+    volumes:
+      - ${NGINX_HOST_LOG_PATH}:/var/log/nginx
+      - ${NGINX_SITES_PATH}:/etc/nginx/sites-available
+      - ${NGINX_SSL_PATH}:/etc/nginx/ssl
+      - ${NGINX_DEFAULT_CONFIG_PATH}:/etc/nginx/nginx.conf
+    ports:
+      - "${NGINX_HOST_HTTP_PORT}:80"
+      - "${NGINX_HOST_HTTPS_PORT}:443"
+      - "${VARNISH_BACKEND_PORT}:81"
+    tty: true
+  websocket:
+    image: node:lts-alpine
+    volumes:
+      - ${APP_PATH}:/app
+    ports:
+      - "${WEBSOCKET_PORT}:3000"
+    depends_on:
+      - nginx
+    tty: true
