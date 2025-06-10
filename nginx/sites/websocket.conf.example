@@ -5,6 +5,13 @@ map $http_upgrade $connection_upgrade {
 
 server {
   listen 80;
+
+  listen 443 ssl;
+  listen [::]:443 ssl ipv6only=on;
+  http2 on;
+  ssl_certificate /etc/nginx/ssl/default.crt;
+  ssl_certificate_key /etc/nginx/ssl/default.key;
+
   server_name _;
 
   location ^~ /socket.io {
