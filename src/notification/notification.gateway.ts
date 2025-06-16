@@ -6,6 +6,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   ConnectedSocket,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import {
   NotificationPayload,
@@ -15,6 +16,7 @@ import { Server, Socket } from 'socket.io';
 import { Inject, forwardRef } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { Logger } from '@nestjs/common';
+import { instrument } from '@socket.io/admin-ui';
 
 const allowedOrigins = process.env.ALLOW_CORS?.split(',');
 
@@ -27,7 +29,7 @@ const allowedOrigins = process.env.ALLOW_CORS?.split(',');
   // namespace: 'notifications', // (可選)如果想將通知功能放在特定命名空間下
 })
 export class NotificationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() // 注入 socket.io 的 Server 實例，用於廣播訊息
   server: Server; // 定義 WebSocket 伺服器實例
@@ -45,6 +47,8 @@ export class NotificationGateway
   // 連線數限制常數
   private readonly MAX_CONNECTIONS_PER_USER = 3; // 每個用戶最大連線數
   private readonly MAX_CONNECTIONS_PER_IP = 3; // 每個 IP 最大連線數
+  // private readonly MAX_RECONNECT_ATTEMPTS = 2; // 最大重連次數
+  // private readonly RECONNECT_WINDOW_MS = 5 * 60 * 1000; // 5分鐘重連窗口
 
   // 超時斷線相關常數
   // 設定超時斷線的時間 (例如：1 分鐘後自動斷開連線)
@@ -54,6 +58,23 @@ export class NotificationGateway
   private readonly TIMEOUT_TIMES = this.TIMEOUT_DURATION * this.TIMEOUT_MINUTES;
 
   private logger: Logger = new Logger('NotificationsGateway');
+
+  afterInit(server: Server) {
+    this.logger.log('WebSocket Gateway initialized');
+    // 基本設定
+    instrument(server, {
+      auth: false, // 開發環境可以關閉認證
+    });
+
+    // 或者啟用認證
+    // instrument(server, {
+    //   auth: {
+    //     type: "basic",
+    //     username: "admin",
+    //     password: "$2b$10$heqvAkYMez.Va6Et2uXInOnkCT6/uQj1brkrbyG3LpopDklcq7ZOS" // "changeit" 的 hash
+    //   },
+    // });
+  }
 
   constructor(
     @Inject(forwardRef(() => NotificationService))
@@ -144,8 +165,8 @@ export class NotificationGateway
       Array.from(this.ipConnections.entries()),
     );
     console.log(
-      `👥 [User Connections 目前 user 連線數] userId: ${userId}:`,
-      this.userSockets.get(userId)?.size,
+      `👥 [User Connections 目前USER連線數] userId: ${userId}:`,
+      `連線數: ${this.userSockets.get(userId)?.size}`,
     );
 
     // --- 設置超時計時器 ---

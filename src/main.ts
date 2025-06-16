@@ -2,9 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import 'dotenv/config';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express'; // 添加這行
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   /**
    * 使用 ValidationPipe 來自動驗證和轉換 DTO
@@ -34,6 +36,11 @@ async function bootstrap() {
     }),
   );
 
+  // admin-ui 的網址 http://127.0.0.1:8080/static/admin-ui/
+  app.useStaticAssets(join(__dirname, '..', 'public'), {
+    prefix: '/static/',
+  });
+
   const frontendUrl =
     process.env.FRONTEND_URL || 'https://dev.salary2020.tw:50401'; // 預設或從環境變數讀取前端URL
 
@@ -50,6 +57,9 @@ async function bootstrap() {
   await app.listen(port);
   console.log(
     `📢 Nest.js API is running on: ${await app.getUrl()} 👉🏻 Allowing CORS for origin: ${frontendUrl}`,
+  );
+  console.log(
+    `🔧 Admin UI available at: ${await app.getUrl()}/static/admin-ui/`,
   );
 }
 
