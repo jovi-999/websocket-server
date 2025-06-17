@@ -15,8 +15,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Inject, forwardRef } from '@nestjs/common';
 import { NotificationService } from './notification.service';
-import { Logger } from '@nestjs/common';
 import { instrument } from '@socket.io/admin-ui';
+import { LoggerService } from 'src/logger/service';
 
 const allowedOrigins = process.env.ALLOW_CORS?.split(',');
 
@@ -57,10 +57,13 @@ export class NotificationGateway
   private readonly TIMEOUT_MINUTES = 10; // 10 分鐘
   private readonly TIMEOUT_TIMES = this.TIMEOUT_DURATION * this.TIMEOUT_MINUTES;
 
-  private logger: Logger = new Logger('NotificationsGateway');
+  constructor(
+    @Inject(forwardRef(() => NotificationService))
+    private readonly notificationService: NotificationService,
+    private readonly logger: LoggerService,
+  ) {}
 
   afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway initialized');
     // 基本設定
     instrument(server, {
       auth: false, // 開發環境可以關閉認證
@@ -75,12 +78,6 @@ export class NotificationGateway
     //   },
     // });
   }
-
-  constructor(
-    @Inject(forwardRef(() => NotificationService))
-    private readonly notificationService: NotificationService,
-    // private readonly logger: LoggerService,
-  ) {}
 
   /**
    * 當客戶端建立 WebSocket 連線時觸發 (Socket.IO 的內建行為)。
@@ -101,8 +98,13 @@ export class NotificationGateway
     // 如果 userId 無效 (undefined, 'null' 字串, 或空字串)，則斷開連線並阻止後續處理。
     if (!userId || userId === 'null' || userId === '') {
       console.error(
-        `❌ [Connection Rejected] 未提供有效 userId，斷開連線: ${client.id}`,
+        `⚠️ [Connection Rejected] 未提供有效 userId，斷開連線: ${client.id}`,
       );
+      // 使用 this.logger.error 會記錄錯誤訊息到 logs/error.log
+      void this.logger.error('連線失敗', {
+        message: `❌未提供有效 userId，斷開連線: ${client.id}`,
+      });
+      // 發送錯誤訊息給前端
       client.emit('errorMessage', '連線失敗：未提供有效的 userId。');
       client.disconnect(true); // 強制斷開，不允許前端自動重連此類錯誤
       return; // 立即返回，不執行後續連線邏輯
@@ -111,14 +113,19 @@ export class NotificationGateway
     // --- 連線數限制 (USER) ---
     const currentUserConnections = this.userSockets.get(userId)?.size || 0;
     if (currentUserConnections >= this.MAX_CONNECTIONS_PER_USER) {
-      // 每個使用者的連線數限制
-      console.warn(
+      console.error(
         `⚠️ [Connection Limit] userId: ${userId} 超過連線數限制 (${this.MAX_CONNECTIONS_PER_USER})，clientId 斷開連線: ${client.id}`,
       );
+
+      void this.logger.error('超過連線數限制(USER)', {
+        message: `❌ clientId: ${client.id} userId: ${userId} 超過連線數限制 (${this.MAX_CONNECTIONS_PER_USER})，`,
+      });
+
       client.emit(
         'errorMessage',
         `［連線失敗］每個使用者的連線數超過限制 (${this.MAX_CONNECTIONS_PER_USER})。`,
       );
+
       client.disconnect(true); // 強制斷開
       return;
     }
@@ -128,9 +135,14 @@ export class NotificationGateway
     const currentIpConnections = this.ipConnections.get(ip) || 0;
 
     if (currentIpConnections >= this.MAX_CONNECTIONS_PER_IP) {
-      console.warn(
-        `⚠️ [Connection Limit] IP: ${ip} 超過連線數限制 (${this.MAX_CONNECTIONS_PER_IP}) {})，clientId 斷開連線: ${client.id}`,
+      console.error(
+        `⚠️ [Connection Limit] IP: ${ip} 超過連線數限制 (${this.MAX_CONNECTIONS_PER_IP})，clientId 斷開連線: ${client.id}`,
       );
+
+      void this.logger.error('超過連線數限制(IP)', {
+        message: `❌ clientId: ${client.id} IP: ${ip} 超過連線數限制 (${this.MAX_CONNECTIONS_PER_IP})，`,
+      });
+
       client.emit(
         'errorMessage',
         `［連線失敗］每個 IP 的連線數超過限制 (${this.MAX_CONNECTIONS_PER_IP}))。`,
@@ -248,9 +260,9 @@ export class NotificationGateway
   sendNotificationToAllClients(payload: NotificationPayload): void {
     const broadcastPayload = { ...payload, to: 'all' as const }; // 確保 payload 包含 'to' 欄位
     this.server.emit('notificationToAll', broadcastPayload);
-    this.logger.log(
-      `已發送通知給所有客戶端: ${JSON.stringify(broadcastPayload)}`,
-    );
+    this.logger.info('已發送通知給所有客戶端', {
+      message: `已發送通知給所有客戶端: ${JSON.stringify(broadcastPayload)}`,
+    });
   }
 
   /**
@@ -268,9 +280,12 @@ export class NotificationGateway
     const targetSockets = this.userSockets.get(userId);
 
     if (targetSockets && targetSockets.size > 0) {
-      this.logger.log(
+      console.log(
         `找到使用者 ${userId} 的 ${targetSockets.size} 個連線，準備發送訊息...`,
       );
+      this.logger.info('發送通知給特定使用者', {
+        message: `發送通知給特定使用者 userId: ${userId}, site: ${site}, data: ${JSON.stringify(data)}`,
+      });
 
       // 處理 data 可能為 undefined 的情況
       const notificationData = data || { message: '預設通知' };
@@ -289,7 +304,9 @@ export class NotificationGateway
       return true; // 用戶在線且訊息已發送
     } else {
       // 如果在 userSockets 中找不到，表示使用者真的不在線上
-      this.logger.error(`userId ${userId} 使用者不在線上.`);
+      void this.logger.error('使用者不在線上', {
+        message: `userId ${userId} 使用者不在線上，無法發送訊息。`,
+      });
       return false; // 用戶不在線，訊息未發送
     }
   }
@@ -308,9 +325,10 @@ export class NotificationGateway
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ): void {
-    this.logger.log(
-      `收到來自客戶端 ${client.id} 的訊息: ${JSON.stringify(data)}`,
-    );
+    console.log(`收到來自客戶端 ${client.id} 的訊息: ${JSON.stringify(data)}`);
+    this.logger.info('收到來自客戶端的訊息', {
+      message: `收到來自客戶端 ${client.id} 的訊息: ${JSON.stringify(data)}`,
+    });
     // 可在此處理前端發來的訊息，例如回傳一個確認訊息
     // client.emit('serverAck', { status: 'received', originalData: data });
   }
