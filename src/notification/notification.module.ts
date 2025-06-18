@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { NotificationGateway } from './notification.gateway';
-import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { LoggerService } from 'src/logger/service';
+import { SalaryNotificationController } from './controllers/salary-notification.controller';
+import { InterviewNotificationController } from './controllers/interview-notification.controller';
 
 @Module({
-  providers: [NotificationGateway, NotificationService, LoggerService], // 註冊 Gateway, Service
-  controllers: [NotificationController], // 註冊 Controller
+  providers: [NotificationGateway, NotificationService, LoggerService],
+  controllers: [SalaryNotificationController, InterviewNotificationController],
   exports: [NotificationGateway, NotificationService],
 })
 export class NotificationModule {}
