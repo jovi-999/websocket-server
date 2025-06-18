@@ -30,7 +30,7 @@ export class SalaryNotificationController {
     private readonly notificationService: NotificationService,
   ) {}
 
-  @Post('send')
+  @Post('bell')
   @HttpCode(HttpStatus.OK)
   sendNotification(@Body() notificationDto: SendSalaryNotificationDto) {
     this.logger.log(

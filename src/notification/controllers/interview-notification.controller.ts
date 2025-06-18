@@ -30,7 +30,7 @@ export class InterviewNotificationController {
     private readonly notificationService: NotificationService,
   ) {}
 
-  @Post('send')
+  @Post('bell')
   @HttpCode(HttpStatus.OK)
   sendNotification(@Body() notificationDto: SendInterviewNotificationDto) {
     this.logger.log(
